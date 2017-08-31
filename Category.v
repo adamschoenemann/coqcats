@@ -19,9 +19,7 @@ Proof. Admitted.
 
 Reserved Notation "f << g" (at level 12, right associativity).
 
-Class Category : Type := {
-  Ob : Type;
-  Hom : Ob -> Ob -> Type;
+Class Category (Ob : Type) (Hom : Ob -> Ob -> Type) : Type := {
 
   compose : forall {a b c : Ob} , Hom b c -> Hom a b -> Hom a c 
     where "f << g" := (compose f g);
@@ -37,9 +35,7 @@ Class Category : Type := {
 
 Notation "f << g" := (compose f g).
 
-Program Definition SetCat : Category := {|
-  Ob := Set;
-  Hom := fun A B => A -> B;
+Program Definition SetCat : Category Set (fun A B => A -> B) := {|
   compose := fun A B C (f : B -> C) (g : A -> B) => fun x => f (g x);
   (*eqv := fun A B (f : A -> B) (f' : A -> B) =>
         forall (x : A), f x = f' x;*)
@@ -57,7 +53,8 @@ Proof.
   - unfold not in *. contradiction (H _ _ H1 H0).
 Qed.
 
-Definition Mono {C : Category} {a b : Ob} (f : Hom a b) :=
+Generalizable Variables Hom Ob.
+Definition Mono `{C : Category Ob Hom} {a b : Ob} (f : Hom a b) :=
   forall (c : Ob) (g h : Hom c a), g <> h -> f << g <> f << h.
 
 Lemma const_eq {A B : Type} (x y : B) :
@@ -84,7 +81,7 @@ Qed.
 Definition Surjective {A B : Type} (f : A -> B) :=
   forall (b : B), exists (a : A), f a = b.
 
-Definition Epi {C : Category} {a b : Ob} (f : Hom a b) :=
+Definition Epi `{C : Category Ob Hom} {a b : Ob} (f : Hom a b) :=
   forall (x : Ob) (g h : Hom b x), g << f = h << f -> g = h.
 
 Theorem epi_iff_surjective {A B : Set} (f : A -> B) :
@@ -136,7 +133,7 @@ Proof.
           [assumption | inversion H2].
 Qed.
       
-Definition Iso {C : Category} {a b : Ob} (f : Hom a b) (g : Hom b a) :=
+Definition Iso `{C : Category Ob Hom} {a b : Ob} (f : Hom a b) (g : Hom b a) :=
              g << f = id /\ f << g = id.
 
 Reserved Notation "a <+> b" (at level 20, right associativity).
@@ -152,12 +149,12 @@ Class Monoid (A : Type) : Type := {
 
 Notation "a <+> b" := (mappend a b).
 
-Program Instance MonoidCat {A : Type} (m : Monoid A) : Category := {
-  Ob := Type;
-  Hom := fun _ _ => A;
-  compose := fun a b c f g => f <+> g;
-  (*eqv := fun _ _ (f : A) (f' : A) => f = f';*)
-}.
+Program Instance MonoidCat {A : Type} (m : Monoid A) 
+  : Category Type (fun _ _ => A) := {
+    compose := fun a b c f g => f <+> g;
+    (*eqv := fun _ _ (f : A) (f' : A) => f = f';*)
+  }.
+
 Next Obligation. apply mappend_assoc. Defined.
 Next Obligation. apply mempty. Defined.
 Next Obligation. apply mempty_unit_l. Defined.
@@ -209,14 +206,14 @@ Proof.
   rewrite (H4 x) in H3. apply H3.
 Qed.*)
 
-Lemma comp_pre {C : Category} {A B X : Ob} {f g : Hom A B} :
+Lemma comp_pre `{C : Category Ob Hom} {A B X : Ob} {f g : Hom A B} :
   f = g -> forall (h : Hom X A), f << h = g << h.
 Proof.
   intros. unfold "<<". destruct C. subst.
   reflexivity.
 Qed.
 
-Lemma comp_post {C : Category} {A B X : Ob} (f g : Hom A B) :
+Lemma comp_post `{C : Category Ob Hom} {A B X : Ob} (f g : Hom A B) :
   f = g -> forall (h : Hom B X), h << f = h << g.
 Proof.
   intros. unfold "<<". destruct C. subst.
@@ -241,7 +238,7 @@ Qed.
    We can then use H1 to get g << id = g' << id and the
    id_unit_r to get g = g' and we're done!
 *)
-Example ex_1_1' (C : Category) (a b : Ob) (f : Hom a b) (g : Hom b a) :
+Example ex_1_1' `(C : Category Ob Hom) (a b : Ob) (f : Hom a b) (g : Hom b a) :
   Iso f g -> forall g', Iso f g' -> g = g'.
 Proof.
   unfold Iso. intros.
@@ -255,28 +252,30 @@ Proof.
   apply H3.
 Qed.
 
-Class Functor (C : Category) (D : Category) : Type := {
-  fob  : @Ob C -> @Ob D;
-  farr : forall {a b : @Ob C}, @Hom C a b -> @Hom D (fob a) (fob b);
-  farr_id : forall {a : @Ob C}, farr (b:=a) id = id;
-  farr_dist : forall {a b c : @Ob C} {f : Hom a b} {g : Hom b c},
+Class Functor {Ob Hom Ob' Hom'} (C : Category Ob Hom) (D : Category Ob' Hom') : Type := {
+  fob  : Ob -> Ob';
+  farr : forall {a b : Ob}, Hom a b -> Hom' (fob a) (fob b);
+  farr_id : forall {a : Ob}, farr (b:=a) id = id;
+  farr_dist : forall {a b c : Ob} {f : Hom a b} {g : Hom b c},
                 farr (g << f) = farr g << farr f;
 }.
 
 Notation "C ->> D" := (Functor C D) (at level 14, right associativity).
 
-Definition IdFunctor (C : Category) : C ->> C := {|
+Definition IdFunctor `(C : Category Ob Hom) : C ->> C := {|
   fob := fun x => x;
   farr := fun a b arr => arr;
   farr_id := fun a => eq_refl;
   farr_dist := fun a b c f g => eq_refl;
 |}.
 
-Program Definition ConstantFunctor (C : Category) (D : Category)
-    (d : @Ob D) : C ->> D := {|
-  fob := fun c => d;
-  farr := fun a b arr => id;
-|}.
+Program Definition ConstantFunctor
+  {Ob Hom Ob' Hom'} (C : Category Ob Hom) (D : Category Ob' Hom')
+  (d : Ob') : C ->> D :=
+  {|
+    fob := fun c => d;
+    farr := fun a b arr => id;
+  |}.
 
 Next Obligation. rewrite id_unit_l. reflexivity. Defined.
 
@@ -294,7 +293,8 @@ Next Obligation. rewrite id_unit_l. reflexivity. Defined.
   we get farr id = id, and by farr_id we have id = id.
   The second part of the conjunction is proven by a similar argument.
 *)
-Example ex_1_2 (C D : Category) (a b : @Ob C) (F : C ->> D)
+Example ex_1_2 {Ob Hom Ob' Hom'} (C : Category Ob Hom)
+               (D : Category Ob' Hom') (a b : Ob) (F : C ->> D)
                (f : Hom a b) (g : Hom b a)
                : Iso f g -> Iso (farr f) (farr g).
 Proof.
@@ -309,21 +309,26 @@ Qed.
    show that it is a functor.
 *)
 
-Program Definition fcompose {C D E : Category} (F : D ->> E) (G : C ->> D)
+Program Definition fcompose 
+  {Ob Ob' Ob'' Hom Hom' Hom''}
+  {C : Category Ob Hom} {D : Category Ob' Hom'} {E : Category Ob'' Hom''}
+  (F : D ->> E) (G : C ->> D)
   : C ->> E := {|
-  fob := fun a => fob (fob a);
-  farr := fun a b arr => farr (farr arr);
-|}.
+    fob := fun a => fob (fob a);
+    farr := fun a b arr => farr (farr arr);
+  |}.
 
 Next Obligation. rewrite !farr_id. reflexivity. Defined.
 Next Obligation. rewrite !farr_dist. reflexivity. Defined. 
 
 Notation "F <<< G" := (fcompose F G) (at level 12, right associativity).
 
-Definition NaturalitySquare {C D : Category} {F G : C ->> D} 
-    (component : forall (a : @Ob C), Hom (@fob C D F a) (@fob C D G a))
-    := forall {a b : @Ob C} (f : Hom a b),
-         farr f << component a = component b << farr f.
+Definition NaturalitySquare
+  {Ob Hom} {C : Category Ob Hom} {D : Category Ob Hom}
+  {F G : C ->> D} 
+  (component : forall (a : Ob), Hom (fob (Functor:=F) a) (fob (Functor:=G) a))
+  := forall {a b : Ob} (f : Hom a b),
+        farr f << component a = component b << farr f.
 
 Record NatTrans {C D : Category} (F G : C ->> D) := {
   component: forall (a : @Ob C), Hom (@fob C D F a) (@fob C D G a);
@@ -465,52 +470,31 @@ Qed.
   Let us show that list and option are functors and that hd is a 
   natural transformation between the two.
 *)
-Program Definition ListCat : Category := {|
-  Ob := Type;
-  Hom := fun A B => list A -> list B;
-  id := fun A x => x;
-|}.
-
 Program Definition TypeCat : Category := {|
   Ob := Type;
   Hom := fun A B => A -> B;
   compose := fun A B C (f : B -> C) (g : A -> B) => fun x => f (g x);
 |}.
 
-Program Definition ListF : Functor TypeCat ListCat := {|
-  fob := fun x => x;
+Program Definition ListF : Functor TypeCat TypeCat := {|
+  fob := fun A => list A;
   farr := fun A B arr => map arr;
 |}.
 
 Next Obligation. 
   unfold TypeCat_obligation_2.
-  unfold ListCat_obligation_3.
   extensionality x. induction x; [reflexivity |].
   simpl in *. rewrite IHx. reflexivity.
 Defined.
 
 Next Obligation.
-  unfold ListCat_obligation_1. extensionality x.
+  extensionality x.
   induction x; [reflexivity |]. simpl. rewrite IHx. 
   reflexivity.
 Defined.
   
-Program Definition OptionCat : Category := {|
-  Ob := Type;
-  Hom := fun A B => option A -> option B;
-  id := fun A x => x;
-|}.
-
-Class Functor' (C : Category) (D : Category) : Type := {
-  fob'  : @Ob C -> @Ob D;
-  farr' : forall {a b : @Ob C}, Hom a b -> Hom (fob' a) (fob' b);
-  farr_id' : forall {a : @Ob C}, farr' (b:=a) id = id;
-  farr_dist' : forall {a b c : @Ob C} {f : Hom a b} {g : Hom b c},
-                farr' (g << f) = farr' g << farr' f;
-}.
-
-Program Definition OptionF : Functor TypeCat OptionCat := {|
-  fob := fun A => A;
+Program Definition OptionF : Functor TypeCat TypeCat := {|
+  fob := fun A => option A;
   farr := fun A B arr => option_map arr;
 |}.
 
@@ -519,7 +503,6 @@ Next Obligation.
   destruct x; reflexivity.
 Defined.
 Next Obligation.
-  unfold OptionCat_obligation_1.
   extensionality x.
   destruct x; reflexivity.
 Defined.
@@ -534,8 +517,34 @@ Program Definition head_nt : ListF =>> OptionF := {|
   component := fun A => head;
 |}.
 
-Record NatTrans {C D : Category} (F G : C ->> D) := {
-  component: forall (a : @Ob C), Hom (@fob C D F a) (@fob C D G a);
-  nat_square : NaturalitySquare component; 
-    (*@farr C D G a b f << component a = component b << @farr C D F a b f;*)
-}.
+Next Obligation.
+  unfold NaturalitySquare. simpl. intros.
+  extensionality x. destruct x; [reflexivity | reflexivity].
+Qed.
+
+Definition opt_to_list {A : Type} (o : option A) : list A :=
+  match o with
+  | None => []
+  | Some x => [x]
+  end.
+
+(* opt_to_list is a natural transformation also *)
+Program Definition opt_to_list_nt : OptionF =>> ListF := {|
+  component := fun A => opt_to_list;
+|}.
+
+Next Obligation.
+  unfold NaturalitySquare. simpl. intros.
+  extensionality x. destruct x; [reflexivity | reflexivity].
+Qed.
+
+Definition OpCat (C Cop : Category) :=
+  @Ob C = @Ob Cop /\
+  @Hom C ~= @Hom Cop /\
+  forall {a b c : @Ob C} (f : Hom b c) (g : Hom a b),
+    exists (fop : Hom c b) (gop : Hom b a),
+      f << g = gop << fop.
+
+Lemma OpCat_Id_False : OpCat SetCat SetCat.
+Proof.
+  unfold OpCat. intros. exists a. reflexivity.
