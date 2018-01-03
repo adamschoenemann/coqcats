@@ -54,6 +54,7 @@ Proof.
 Qed.
 
 Generalizable Variables Hom Ob.
+
 Definition Mono `{C : Category Ob Hom} {a b : Ob} (f : Hom a b) :=
   forall (c : Ob) (g h : Hom c a), g <> h -> f << g <> f << h.
 
@@ -330,20 +331,21 @@ Definition NaturalitySquare
   := forall {a b : Ob} (f : Hom a b),
         farr f << component a = component b << farr f.
 
-Record NatTrans {C D : Category} (F G : C ->> D) := {
-  component: forall (a : @Ob C), Hom (@fob C D F a) (@fob C D G a);
-  nat_square : NaturalitySquare component; 
-    (*@farr C D G a b f << component a = component b << @farr C D F a b f;*)
-}.
+Record NatTrans {Ob Hom} {C D : Category Ob Hom} (F G : C ->> D) := {
+    component: forall (a : Ob), Hom (fob (Functor:=F) a) (fob (Functor:=G) a);
+    nat_square : NaturalitySquare component; 
+      (*@farr C D G a b f << component a = component b << @farr C D F a b f;*)
+  }.
 
 Notation "F =>> G" := (NatTrans F G) (at level 13, right associativity).
 
-Program Definition ncompose {C D : Category} {F G H : C ->> D}
+Check component.
+Program Definition ncompose {Ob Hom} {C D : Category Ob Hom} {F G H : C ->> D}
     (u : G =>> H) (v : F =>> G) : F =>> H := {|
-   component := fun a => @component C D G H u a << @component C D F G v a;
+   component := fun a => component G H u a << component F G v a;
 |}.
 
-Program Definition IdNatTrans {C D : Category} (F : C ->> D) : F =>> F := {|
+Program Definition IdNatTrans {Ob Hom} {C D : Category Ob Hom} (F : C ->> D) : F =>> F := {|
   component := fun a => id;
 |}.
 
@@ -394,7 +396,7 @@ Defined.*)
   (from Program) and proof_irrelevance to discard the requirement
   that the proofs of nat_square are equal (since we don't care).
 *)
-Lemma NatTrans_equal {C D : Category} {F G : C ->> D}
+Lemma NatTrans_equal {Ob Hom} {C D : Category Ob Hom} {F G : C ->> D}
     (u v : F =>> G) (p : component F G u = component F G v) :
     u = v.
 Proof. dependent destruction u. dependent destruction v.
@@ -402,11 +404,10 @@ Proof. dependent destruction u. dependent destruction v.
   f_equal. apply proof_irrelevance.
 Qed.
 
-Instance FunctorsCat (C D : Category) : Category := {
-  Ob := C ->> D;
-  Hom := fun F G => F =>> G;
-  compose := fun a b c u v => ncompose u v;
-}.
+Instance FunctorsCat {Ob Hom} (C D : Category Ob Hom) :
+  Category (C ->> D) (NatTrans) := {
+    compose := fun a b c u v => ncompose u v;
+  }.
 - intros. unfold ncompose. apply NatTrans_equal.
   simpl. extensionality x. rewrite assoc. reflexivity.
 - intros. apply IdNatTrans.
@@ -447,10 +448,10 @@ Defined.
     defined by composition of their components
     H1 /\ H2 shows us that the goal is reached.
 *)
-Example ex_1_5 (Fun C D : Category) 
-               (F G : @Ob (FunctorsCat C D)) 
-               (u : Hom F G) (v : Hom G F) : 
-  Iso u v <-> forall (x : @Ob C), Iso (component F G u x) (component G F v x).
+Example ex_1_5 {Ob Hom} (C D : Category Ob Hom) 
+               (F G : C ->> D) 
+               (u : F =>> G) (v : G =>> F) : 
+  Iso u v <-> forall (x : Ob), Iso (component F G u x) (component G F v x).
 Proof. 
   split.
   - intros. unfold Iso in *.
@@ -470,9 +471,7 @@ Qed.
   Let us show that list and option are functors and that hd is a 
   natural transformation between the two.
 *)
-Program Definition TypeCat : Category := {|
-  Ob := Type;
-  Hom := fun A B => A -> B;
+Program Definition TypeCat : Category Type (fun A B => A -> B) := {|
   compose := fun A B C (f : B -> C) (g : A -> B) => fun x => f (g x);
 |}.
 
@@ -537,14 +536,3 @@ Next Obligation.
   unfold NaturalitySquare. simpl. intros.
   extensionality x. destruct x; [reflexivity | reflexivity].
 Qed.
-
-Definition OpCat (C Cop : Category) :=
-  @Ob C = @Ob Cop /\
-  @Hom C ~= @Hom Cop /\
-  forall {a b c : @Ob C} (f : Hom b c) (g : Hom a b),
-    exists (fop : Hom c b) (gop : Hom b a),
-      f << g = gop << fop.
-
-Lemma OpCat_Id_False : OpCat SetCat SetCat.
-Proof.
-  unfold OpCat. intros. exists a. reflexivity.
